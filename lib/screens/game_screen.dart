@@ -868,7 +868,7 @@ class _RidePainter extends CustomPainter {
     for (int i = 0; i < 6; i++) {
       final wx = x * par + i * 640;
       final cx = ((wx % (size.width + 500)) - 250);
-      final cy = 40 + (_h(i * 3 + 1) % 90);
+      final cy = 40.0 + (_h(i * 3 + 1) % 90);
       final s = 0.7 + (_h(i * 5 + 2) % 60) / 100;
       canvas.drawCircle(Offset(cx, cy), 26 * s, paint);
       canvas.drawCircle(Offset(cx + 26 * s, cy + 6 * s), 20 * s, paint);
