@@ -44,7 +44,7 @@ class RiderSettings extends ChangeNotifier {
   Map<String, double> best = {}; // '<tier>_<mode>' -> metres/score
   int rides = 0;
   int totalCoins = 0;
-  bool isPro = false;
+  bool isPro = true; // everything unlocked — no Pro version
   int lastReviewPrompt = 0; // epoch ms
 
   static const Map<String, int> _defaultCustomColors = {

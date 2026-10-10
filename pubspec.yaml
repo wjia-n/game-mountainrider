@@ -2,7 +2,7 @@ name: mountainrider
 description: Mountain Rider by WAJIHA - downhill mountain biking arcade. 100% original.
 publish_to: 'none'
 
-version: 2.0.0+1
+version: 2.0.1+2
 
 environment:
   sdk: ^3.13.5
