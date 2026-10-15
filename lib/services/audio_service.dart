@@ -17,6 +17,9 @@ import 'package:audioplayers/audioplayers.dart';
 ///   resumes exactly where it left off instead of restarting or dying.
 /// - Every public method catches player errors; audio can never crash the app.
 class RiderAudio {
+  /// Per-game pitch character (mountainrider): 1.22x. Makes SFX unique.
+  static const double _pitchMul = 1.220;
+
   static const int _rate = 22050;
   final AudioPlayer _sfx = AudioPlayer();
   final AudioPlayer _music = AudioPlayer();
@@ -113,6 +116,8 @@ class RiderAudio {
 
   List<double> _tone(double freq, double secs,
       {double freqEnd = 0, double attack = 0.02, double harmonics = 0.25}) {
+    freq *= _pitchMul;
+    freqEnd *= _pitchMul;
     final n = (_rate * secs).round();
     final out = List<double>.filled(n, 0);
     for (int i = 0; i < n; i++) {
@@ -194,55 +199,44 @@ class RiderAudio {
       _cache.putIfAbsent(key, () => _wav(build()));
 
   Uint8List _menuBytes() => _clip('music_menu', () {
-        // Gentle campfire fingerpicking: G – Em – C – D plucks, 14s loop.
-        const seq = [
-          [196.0, 246.94, 293.66, 392.0], // G
-          [164.81, 196.0, 246.94, 329.63], // Em
-          [130.81, 196.0, 261.63, 329.63], // C
-          [146.83, 220.0, 293.66, 369.99], // D
-        ];
+        // F arpeggiated 0 – 2 – 5 – 4, 16s loop. Unique to mountainrider.
+        final notes = [174.62, 220.00, 261.63, 220.00, 220.00, 261.63, 329.63, 261.63, 293.67, 349.23, 440.00, 349.23, 261.63, 329.63, 392.00, 329.63];
         final out = <double>[];
-        for (final chord in seq) {
-          out.addAll(_padChord([chord[0] / 2], 3.5));
-          for (final f in chord) {
-            out.addAll(_pluck(f, 0.55));
-          }
-          out.addAll(List<double>.filled((_rate * 0.4).round(), 0));
+        final noteLen = 16.0 / notes.length;
+        for (final n in notes) {
+          out.addAll(_tone(n, noteLen * 0.9, harmonics: 0.3));
+          final gap = List<double>.filled((_rate * noteLen * 0.1).round(), 0);
+          out.addAll(gap);
+        }
+        // Soft pad underneath
+        final pad = _padChord([174.62, 220.00, 261.63], 16.0);
+        for (int i = 0; i < out.length && i < pad.length; i++) {
+          out[i] += pad[i] * 0.3;
         }
         return out;
       });
 
+
   Uint8List _gameBytes() => _clip('music_game', () {
-        // Driving trail rhythm: bass pulse + strummed chords, 10s loop.
-        const chords = [
-          [196.0, 246.94, 293.66], // G
-          [196.0, 246.94, 293.66], // G
-          [174.61, 220.0, 261.63], // F
-          [146.83, 220.0, 293.66], // D
-        ];
-        final n = (_rate * 10).round();
-        final out = List<double>.filled(n, 0);
-        // Bass pulse on eighths.
-        for (int k = 0; k < 20; k++) {
-          final start = (n * k / 20).round();
-          final tone = _pluck(chords[k ~/ 5][0] / 2, 0.32);
-          for (int i = 0; i < tone.length && start + i < n; i++) {
-            out[start + i] += tone[i] * 0.5;
+        // F bass + melody 0 – 2 – 5 – 4, 16s loop. Unique to mountainrider.
+        final bassNotes = [87.31, 110.00, 146.84, 130.81];
+        final melNotes = [523.26, 659.26, 880.00, 784.00];
+        final out = List<double>.filled((_rate * 16).round(), 0);
+        final segLen = (_rate * 4).round();
+        for (int s = 0; s < 4; s++) {
+          final bass = _tone(bassNotes[s], 3.5, harmonics: 0.4);
+          final mel = _tone(melNotes[s], 1.2, harmonics: 0.25);
+          for (int i = 0; i < bass.length && s * segLen + i < out.length; i++) {
+            out[s * segLen + i] += bass[i] * 0.5;
           }
-        }
-        // Strummed chords on quarters.
-        for (int k = 0; k < 10; k++) {
-          final start = (n * k / 10).round();
-          for (int s = 0; s < 3; s++) {
-            final tone = _pluck(chords[k ~/ 3 % 4][s], 0.3);
-            final off = start + (s * _rate * 0.015).round();
-            for (int i = 0; i < tone.length && off + i < n; i++) {
-              out[off + i] += tone[i] * 0.22;
-            }
+          final melStart = s * segLen + segLen ~/ 4;
+          for (int i = 0; i < mel.length && melStart + i < out.length; i++) {
+            out[melStart + i] += mel[i] * 0.35;
           }
         }
         return out;
       });
+
 
   // ------------------------------------------------------------------ SFX
   Future<void> _play(Uint8List bytes) async {

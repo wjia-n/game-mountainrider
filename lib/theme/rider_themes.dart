@@ -61,7 +61,7 @@ class RiderThemes {
   static const List<RiderThemeDef> all = [
     RiderThemeDef(
       id: 'alpine',
-      name: 'Alpine Meadow',
+      name: 'Summit Meadow',
       skyTop: Color(0xFF7FB6D9),
       skyBottom: Color(0xFFDDEBDC),
       sun: Color(0xFFFFE9A8),
@@ -293,7 +293,7 @@ class RiderThemes {
     ),
     RiderThemeDef(
       id: 'highland',
-      name: 'Highland Moor',
+      name: 'Misty Moor',
       skyTop: Color(0xFF6E8A9A),
       skyBottom: Color(0xFFD8E0D4),
       sun: Color(0xFFF0E8C0),
