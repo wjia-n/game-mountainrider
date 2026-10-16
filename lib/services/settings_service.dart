@@ -282,4 +282,14 @@ class RiderSettings extends ChangeNotifier {
     notifyListeners();
     await _save();
   }
+
+  /// Cheat-menu full reset: clears ride stats and bests (audio settings
+  /// and the rider name survive).
+  Future<void> resetProgress() async {
+    best.clear();
+    rides = 0;
+    totalCoins = 0;
+    notifyListeners();
+    await _save();
+  }
 }

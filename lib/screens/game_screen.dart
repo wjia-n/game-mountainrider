@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:share_plus/share_plus.dart';
+import '../cheat_menu.dart';
 import '../engine/rider_engine.dart';
 import '../services/audio_service.dart';
 import '../services/settings_service.dart';
@@ -60,6 +61,11 @@ class _GameScreenState extends State<GameScreen>
     _engine = RiderEngine(vsync: this, tier: widget.tier, mode: widget.mode);
     _fxSub = _engine.fx.listen(_onFx);
     _engine.addListener(_onEngine);
+    // persisted cheat: infinite lives (god mode) applies to every ride
+    // until the cheat is switched off in settings.
+    CheatMenu.infiniteLives.then((v) {
+      if (mounted) _engine.godMode = v;
+    });
     widget.audio.startGameMusic();
     _engine.start();
   }
@@ -124,6 +130,8 @@ class _GameScreenState extends State<GameScreen>
         _burst(24, const Color(0xFF8B8B8B));
       case RiderFxKind.pedal:
         a.pedal();
+      case RiderFxKind.banner:
+        _banner(fx.text);
       case RiderFxKind.finish:
         break; // handled by phase listener
     }
@@ -419,50 +427,72 @@ class _GameScreenState extends State<GameScreen>
       child: Row(
         children: [
           Expanded(
-            child: _pedalBtn(t, '🛑 BRAKE', e.brakeDown, false),
+            child: _pedalBtn(e, t, '🛑 BRAKE', e.brakeDown, false),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _pedalBtn(t, '🚴 PEDAL', e.pedalDown, true),
+            child: _pedalBtn(e, t, '🚴 PEDAL', e.pedalDown, true),
           ),
         ],
       ),
     );
   }
 
-  Widget _pedalBtn(RiderThemeDef t, String label, bool on, bool primary) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: on
-              ? [t.accent, t.accentDark]
-              : [
-                  Color.lerp(t.panel, Colors.white, 0.3)!,
-                  t.panel,
-                ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: on ? t.accentDark : t.muted.withValues(alpha: 0.5), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
+  /// Press-and-hold pedal/brake buttons. The engine only accepts input while
+  /// riding, so taps during countdown/pause are safely ignored.
+  Widget _pedalBtn(
+      RiderEngine e, RiderThemeDef t, String label, bool on, bool primary) {
+    void press(bool down) {
+      if (down) {
+        if (primary) {
+          e.setPedals(pedal: true, brake: false);
+        } else {
+          e.setPedals(pedal: false, brake: true);
+        }
+      } else {
+        e.setPedals(pedal: false, brake: false);
+      }
+      setState(() {});
+    }
+
+    return GestureDetector(
+      onTapDown: (_) => press(true),
+      onTapUp: (_) => press(false),
+      onTapCancel: () => press(false),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: on
+                ? [t.accent, t.accentDark]
+                : [
+                    Color.lerp(t.panel, Colors.white, 0.3)!,
+                    t.panel,
+                  ],
           ),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: TextStyle(
-            color: on ? Colors.white : t.text,
-            fontWeight: FontWeight.w900,
-            fontSize: 17,
-            letterSpacing: 1.5,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: on ? t.accentDark : t.muted.withValues(alpha: 0.5),
+              width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              offset: const Offset(0, 4),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: on ? Colors.white : t.text,
+              fontWeight: FontWeight.w900,
+              fontSize: 17,
+              letterSpacing: 1.5,
+            ),
           ),
         ),
       ),
@@ -836,7 +866,7 @@ class _RidePainter extends CustomPainter {
 
     // the bike + rider
     _bike(canvas, Offset(riderX, ry - engine.y * 0.5), engine.angle,
-        engine.wheelSpin, engine.pedalDown);
+        engine.wheelSpin, engine.pedalAngle);
 
     // dust while pedaling hard on the ground
     if (engine.pedalDown && engine.y <= 0.5 && engine.v > 120) {
@@ -913,7 +943,8 @@ class _RidePainter extends CustomPainter {
     }
   }
 
-  void _bike(Canvas canvas, Offset at, double angle, double spin, bool pedaling) {
+  void _bike(
+      Canvas canvas, Offset at, double angle, double spin, double pedalAngle) {
     canvas.save();
     canvas.translate(at.dx, at.dy);
     canvas.rotate(angle);
@@ -953,7 +984,22 @@ class _RidePainter extends CustomPainter {
         Paint()..color = const Color(0xFF242424)..strokeWidth = 5);
     canvas.drawLine(const Offset(16, -30), const Offset(20, -38),
         Paint()..color = const Color(0xFF242424)..strokeWidth = 5);
-    // rider: legs pedaling, torso leaning forward, arms to bars, helmet head
+    // crank: bottom bracket + rotating pedals (drives the leg animation)
+    final crankC = const Offset(-6, -6);
+    const crankR = 11.0;
+    final footA = Offset(crankC.dx + crankR * math.cos(pedalAngle),
+        crankC.dy + crankR * math.sin(pedalAngle));
+    final footB = Offset(crankC.dx - crankR * math.cos(pedalAngle),
+        crankC.dy - crankR * math.sin(pedalAngle));
+    final crankArm = Paint()
+      ..color = const Color(0xFF4A4A4A)
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(crankC, footA, crankArm);
+    canvas.drawLine(crankC, footB, crankArm);
+    canvas.drawCircle(crankC, 3.5, Paint()..color = const Color(0xFF242424));
+    // rider: legs pedaling the crank, torso leaning forward, arms to bars,
+    // helmet head
     final kit = Paint()
       ..color = style.kit
       ..strokeWidth = 9
@@ -962,11 +1008,14 @@ class _RidePainter extends CustomPainter {
       ..color = style.kitDark
       ..strokeWidth = 9
       ..strokeCap = StrokeCap.round;
-    final pedalPhase = pedaling ? spin * 2 : 0.4;
-    final legSwing = math.sin(pedalPhase) * 8;
-    // legs
-    canvas.drawLine(const Offset(-2, -34), Offset(-14, -8 + legSwing), kitD);
-    canvas.drawLine(const Offset(-2, -34), Offset(8, -8 - legSwing), kitD);
+    // bent legs: hip -> knee -> foot, cycling with the crank
+    const hip = Offset(-2, -34);
+    for (final foot in [footA, footB]) {
+      final knee = Offset((hip.dx + foot.dx) / 2 + 6, (hip.dy + foot.dy) / 2);
+      canvas.drawLine(hip, knee, kitD); // thigh
+      canvas.drawLine(knee, foot, kitD); // shin
+      canvas.drawCircle(foot, 4.5, Paint()..color = const Color(0xFF242424));
+    }
     // torso
     canvas.drawLine(const Offset(-2, -34), const Offset(16, -52), kit);
     // arms

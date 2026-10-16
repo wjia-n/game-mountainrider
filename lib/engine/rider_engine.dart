@@ -82,6 +82,7 @@ enum RiderFxKind {
   crash,
   pedal, // chain tick while pedaling
   finish,
+  banner, // text-only banner (e.g. cheat confirmations)
 }
 
 class RiderFx {
@@ -158,11 +159,17 @@ class RiderEngine extends ChangeNotifier {
   final RideTier tier;
   final PlayMode mode;
 
+  /// The currently live engine, so the cheat menu (opened from settings)
+  /// can drive the active ride. Set on construction, cleared on dispose.
+  static RiderEngine? active;
+
   RiderEngine({
     required this.vsync,
     required this.tier,
     required this.mode,
-  });
+  }) {
+    active = this;
+  }
 
   TierParams get p => tierParams[tier]!;
 
@@ -181,6 +188,8 @@ class RiderEngine extends ChangeNotifier {
   int coins = 0;
   double airtime = 0;
   double wheelSpin = 0;
+  double pedalAngle = 0; // crank angle: drives the leg-pedaling animation
+  bool godMode = false; // cheat: no crash, no stamina drain
   double timeLeft = 60; // score attack
   double elapsed = 0;
 
@@ -210,11 +219,19 @@ class RiderEngine extends ChangeNotifier {
   // ---------------- world ----------------
   double terrain(double wx) {
     final grow = math.min(2.2, 1 + wx / 9000);
-    return (math.sin(wx * 0.004) * 0.9 +
+    final wave = (math.sin(wx * 0.004) * 0.9 +
             math.sin(wx * 0.011 + 1.7) * 0.45 +
             math.sin(wx * 0.023 + 0.5) * 0.22) *
         p.amp *
         grow;
+    // Flat launch pad: the first 500 px ease in from perfectly flat.
+    // Without this the deterministic spawn can sit on an uphill steeper
+    // than pedalAccel can climb from a standstill — the bike would be
+    // stuck in place forever (slope gravity > pedal gain at v=0).
+    if (wx >= 500) return wave;
+    if (wx <= 0) return 0;
+    final s = wx / 500;
+    return wave * (s * s * (3 - 2 * s)); // smoothstep ease-in
   }
 
   double slopeAt(double wx) => (terrain(wx + 8) - terrain(wx - 8)) / 16;
@@ -241,6 +258,8 @@ class RiderEngine extends ChangeNotifier {
     coins = 0;
     airtime = 0;
     wheelSpin = 0;
+    pedalAngle = 0;
+    godMode = false;
     timeLeft = 60;
     elapsed = 0;
     pedalDown = false;
@@ -357,7 +376,9 @@ class RiderEngine extends ChangeNotifier {
     // drive
     if (pedalDown && stamina > 0) {
       v = math.min(p.maxSpeed, v + p.pedalAccel * dt);
-      stamina = math.max(0, stamina - p.staminaDrain * dt);
+      stamina = math.max(0, stamina - (godMode ? 0 : p.staminaDrain) * dt);
+      // pedal cadence: crank spins while pedaling (drives leg animation)
+      pedalAngle += dt * (4.5 + v / 55);
       _pedalSfxT -= dt;
       if (_pedalSfxT <= 0) {
         _pedalSfxT = 0.28;
@@ -397,7 +418,7 @@ class RiderEngine extends ChangeNotifier {
       }
       // rock collision
       final rock = _rockNear(x);
-      if (rock != null && (x - rock.x).abs() < rock.radius + 12) {
+      if (!godMode && rock != null && (x - rock.x).abs() < rock.radius + 12) {
         _finish('Hit a rock! 🪨', byTime: false);
         _fx.add(const RiderFx(RiderFxKind.crash, text: 'Hit a rock! 🪨'));
         return;
@@ -413,12 +434,12 @@ class RiderEngine extends ChangeNotifier {
         y = 0;
         final norm = angle % (math.pi * 2);
         final deg = (norm > math.pi ? norm - 2 * math.pi : norm).abs();
-        if (deg > 1.25) {
+        if (!godMode && deg > 1.25) {
           _finish('Landed on your roof! 🤕', byTime: false);
           _fx.add(const RiderFx(RiderFxKind.crash, text: 'Landed on your roof! 🤕'));
           return;
         }
-        if (vy < p.hardLanding) {
+        if (!godMode && vy < p.hardLanding) {
           _finish('What a landing… not. 💥', byTime: false);
           _fx.add(const RiderFx(RiderFxKind.crash, text: 'What a landing… not. 💥'));
           return;
@@ -485,8 +506,28 @@ class RiderEngine extends ChangeNotifier {
   @visibleForTesting
   void debugWatchdog() => _watchdogTick();
 
+  // ---------------- cheats ----------------
+  /// Skip ahead to the next trail section. Only works while riding.
+  void cheatSkipSection() {
+    if (phase != RidePhase.riding) return;
+    x += 2000;
+    y = 0;
+    vy = 0;
+    stamina = math.max(stamina, 40);
+    _fx.add(const RiderFx(RiderFxKind.banner, text: 'Section skipped ⏭️'));
+    notifyListeners();
+  }
+
+  /// Trigger an instant win: bonus coins and a victory finish.
+  void cheatWin() {
+    if (phase != RidePhase.riding) return;
+    coins += 50;
+    _finish('Instant win! 🏆', byTime: false);
+  }
+
   @override
   void dispose() {
+    if (identical(active, this)) active = null;
     _watchdog?.cancel();
     _ticker?.stop();
     _ticker?.dispose();

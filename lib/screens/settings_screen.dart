@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../cheat_menu.dart';
+import '../engine/rider_engine.dart';
 import '../services/audio_service.dart';
 import '../services/settings_service.dart';
 import '../theme/rider_themes.dart';
@@ -67,6 +69,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
           settings: _s,
         ),
       ),
+    );
+  }
+
+  /// Cheat callbacks: act on the live ride when one exists, otherwise on
+  /// persisted settings. The menu opens from the version label below.
+  CheatCallbacks _cheatCallbacks() {
+    final engine = RiderEngine.active;
+    return CheatCallbacks(
+      onSkipLevel: () {
+        if (engine != null && engine.phase == RidePhase.riding) {
+          engine.cheatSkipSection();
+        } else {
+          widget.audio.click();
+        }
+      },
+      onInstantWin: () {
+        if (engine != null && engine.phase == RidePhase.riding) {
+          engine.cheatWin();
+        }
+      },
+      onInfiniteLives: () {
+        // Mountain Rider has no lives: infinite lives = god mode
+        // (no crashes, no stamina drain) on the active ride.
+        if (engine != null) engine.godMode = true;
+      },
+      onUnlockAll: () => _s.setPro(true),
+      onResetGame: () {
+        _s.resetProgress();
+        final e = RiderEngine.active;
+        if (e != null) e.restart();
+      },
     );
   }
 
@@ -239,6 +272,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                // version label: 5 rapid taps opens the cheat menu
+                Center(
+                  child: CheatMenuTrigger(
+                    callbacks: _cheatCallbacks(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Mountain Rider v2.0.1',
+                        style: TextStyle(color: t.muted, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
