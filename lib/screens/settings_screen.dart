@@ -7,6 +7,7 @@ import '../theme/rider_themes.dart';
 import 'custom_theme_screen.dart';
 import 'pro_screen.dart';
 import 'widgets.dart';
+import '../transfer/transfer_ui.dart';
 
 /// Settings: rider name, theme picker (12 + custom), rider/bike styles,
 /// audio toggles + volume, Pro link.
@@ -130,6 +131,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+              TransferSaveTile(gameSlug: 'mountainrider'),
                 _card(
                   t,
                   'Rider',
