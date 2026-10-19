@@ -416,9 +416,11 @@ class RiderEngine extends ChangeNotifier {
         _finish('Out of steam! 🥵', byTime: false);
         return;
       }
-      // rock collision
+      // rock collision — forgiving: only triggers on real visual overlap
       final rock = _rockNear(x);
-      if (!godMode && rock != null && (x - rock.x).abs() < rock.radius + 12) {
+      if (!godMode &&
+          rock != null &&
+          (x - rock.x).abs() < rock.radius - 4) {
         _finish('Hit a rock! 🪨', byTime: false);
         _fx.add(const RiderFx(RiderFxKind.crash, text: 'Hit a rock! 🪨'));
         return;
