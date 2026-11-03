@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../engine/rider_engine.dart';
@@ -418,7 +419,7 @@ class _MenuScreenState extends State<MenuScreen> {
           onPressed: _openSettings,
         ),
         TrailButton(
-          label: _s.isPro ? 'PRO ✓' : 'Get PRO',
+          label: defaultTargetPlatform == TargetPlatform.iOS ? '⭐ Gold Star' : (_s.isPro ? 'PRO ✓' : 'Get PRO'),
           icon: Icons.star,
           theme: t,
           small: true,
