@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/rider_themes.dart';
 
@@ -158,20 +159,23 @@ class ProLock extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
       ),
-      child: const Row(
+      // iOS shows the lock icon only — no PRO text (Android keeps the pill).
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lock, size: 11, color: Colors.white),
-          SizedBox(width: 3),
-          Text(
-            'PRO',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
+          const Icon(Icons.lock, size: 11, color: Colors.white),
+          if (defaultTargetPlatform != TargetPlatform.iOS) ...[
+            const SizedBox(width: 3),
+            const Text(
+              'PRO',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

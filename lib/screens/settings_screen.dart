@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../cheat_menu.dart';
 import '../engine/rider_engine.dart';
@@ -198,7 +199,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: TrailButton(
-                      label: 'Unlock all 12 themes with PRO',
+                      label: defaultTargetPlatform == TargetPlatform.iOS
+                          ? 'Unlock all 12 themes'
+                          : 'Unlock all 12 themes with PRO',
                       icon: Icons.star,
                       theme: t,
                       small: true,
